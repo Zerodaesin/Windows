@@ -84,4 +84,26 @@ Get-Command | Get-Member -MemberType Method
 One way of manipulating objects is pulling out the properties from the output of a cmdlet and creating a new object. This is done using Select-Object
 
 an example of listing the directories and just selecting the mode and the name:
-<https://i.imgur.com/Zdxicjj.png>
+![image](https://user-images.githubusercontent.com/113439757/213785676-a2d2e19e-6d7b-4e17-bef7-103d3ddfd22b.png)
+You can also use the following flags to select particular information:
+first - gets the first x object
+last - gets the last x object
+unique - shows the unique objects
+skip - skips x objects
+
+#Filtering Objects
+Verb-Noun | Where-Object -Property PropertyName -operator Value
+Verb-Noun | Where-Object {$_.PropertyName -operator Value}
+The second version uses the $_ operator to iterate through every object passed to the Where-Object cmdlet.
+Where -operator is a list of the following operators:
+-Contains: if any item in the property value is an exact match for the specified value
+-EQ: if the property value is the same as the specified value
+-GT: if the property value is greater than the specified value
+Full list of operators
+https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/where-object?view=powershell-7.3&viewFallbackFrom=powershell-6
+
+#Sort Objects
+Verb-Noun | Sort-Object
+
+#IP address info
+Get-NetIPAddress
